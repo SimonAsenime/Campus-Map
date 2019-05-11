@@ -17,9 +17,10 @@ public class Map extends JPanel {
   private int x, y, sx1, sx2, sy1, sy2, cur_distance;
   private int x1 = 0; private int x2 = 0;
   private int y1 = 0; private int y2 = 0;
+
   private Dimension size;
   private byte[] walk_map = new byte[626*700];
-  private boolean draw_walkmap = false; private boolean diag = true;
+  private boolean draw_walkmap = false; private boolean diag = true; private boolean creating_path = false;
 
   private Mouse mouse = new Mouse();
   private Input input = new Input();
@@ -82,10 +83,8 @@ public class Map extends JPanel {
   }
 
   public void set_points (int xp1, int yp1, int xp2, int yp2) {
-    x1 = xp1;
-    x2 = xp2;
-    y1 = yp1;
-    y2 = yp2;
+    x1 = xp1; x2 = xp2;
+    y1 = yp1; y2 = yp2;
   }
 
   public int distance_calc () {
@@ -208,28 +207,35 @@ public class Map extends JPanel {
   }
 
   public void create_path () {
-    path_img = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
-    path_creater = new Path_Finder(100000, diag, getWidth(), getHeight(), walk_map);
-    Route route = path_creater.findPath(x1, y1, x2, y2);
-    if (route != null) {
-      for (int s = 0; s < route.get_length(); s++) {
-        path_img.setRGB(route.get_x(s), route.get_y(s), Color.GREEN.getRGB());
-        path_img.setRGB(route.get_x(s)-1, route.get_y(s), Color.GREEN.getRGB());
-        path_img.setRGB(route.get_x(s)+1, route.get_y(s), Color.GREEN.getRGB());
+    Thread t = new Thread(new Runnable() {
+      public void run () {
+        creating_path = true;
+        path_img = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        path_creater = new Path_Finder(diag, getWidth(), getHeight(), walk_map, 6);
+        Route route = path_creater.findPath(x1, y1, x2, y2);
+        if (route != null) {
+          for (int s = 0; s < route.get_length(); s++) {
+            path_img.setRGB(route.get_x(s), route.get_y(s), Color.GREEN.getRGB());
+            path_img.setRGB(route.get_x(s)-1, route.get_y(s), Color.GREEN.getRGB());
+            path_img.setRGB(route.get_x(s)+1, route.get_y(s), Color.GREEN.getRGB());
+          }
+          cur_distance = route.get_length();
+        }
+        creating_path = false;
       }
-      cur_distance = route.get_length();
-    }
+    });
+    t.start();
   }
 
   public void update () {
-    if (mouse.is_button_pressed(Mouse.LEFT_MOUSE)) {
+    if (mouse.is_button_pressed(Mouse.RIGHT_MOUSE)) {
       x1 = mouse.get_x();
       y1 = mouse.get_y();
       path_img.setRGB(x1, y1, Color.CYAN.getRGB());
       path_img.setRGB(x1+1, y1, Color.CYAN.getRGB());
       path_img.setRGB(x1-1, y1, Color.CYAN.getRGB());
     }
-    if (mouse.is_button_pressed(Mouse.RIGHT_MOUSE)) {
+    if (mouse.is_button_pressed(Mouse.LEFT_MOUSE)) {
         x2 = mouse.get_x();
         y2 = mouse.get_y();
         path_img.setRGB(x2, y2, Color.CYAN.getRGB());
@@ -263,7 +269,7 @@ public class Map extends JPanel {
       construct_walkmap();
       save_walkmap();
     }
-    bar.update(diag, mouse.get_x(), mouse.get_y(), distance_calc());
+    bar.update(diag, creating_path, mouse.get_x(), mouse.get_y(), distance_calc());
   }
 
   public static void main(String[] args) throws InterruptedException {

@@ -11,7 +11,7 @@ public class Tool_Bar extends JPanel {
 
   private Dimension size;
   private Time time;
-  private boolean path_type;
+  private boolean path_type, creating_path;
   private int mouse_x, mouse_y, distance;
 
   public Tool_Bar (int width, int height) {
@@ -43,10 +43,12 @@ public class Tool_Bar extends JPanel {
     g2d.drawString(distance/100+" m", 4, 50);
     g2d.drawString(time.get_hours()+" hrs, "+time.get_minutes()+" mins, "+time.get_seconds()+" secs", 4, 80);
     g2d.drawString("Diagonal Path: " + path_type, 4, 110);
+    g2d.drawString("Creating Path: " + creating_path, 4, 140);
   }
 
-  public void update (boolean path_type, int mx, int my, int distance) {
+  public void update (boolean path_type, boolean creating_path, int mx, int my, int distance) {
     this.path_type = path_type;
+    this.creating_path = creating_path;
     mouse_x = mx; mouse_y = my;
     this.distance = distance;
     time = Time.calc_time(distance);

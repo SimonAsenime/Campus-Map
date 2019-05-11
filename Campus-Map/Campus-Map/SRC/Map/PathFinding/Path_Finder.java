@@ -4,130 +4,90 @@ import java.util.*;
 
 public class Path_Finder {
 
-	private ArrayList<Node> closed = new ArrayList<Node>();
-  private ArrayList<Node> open = new ArrayList<Node>();
-	private int maxSearchDistance;
-	private Node[][] nodes;
+	private ArrayList<Node> set = new ArrayList<Node>();
 	private boolean allowDiagMovement;
   private int width, height;
   private byte[] map;
+	private int num_threads;
+	private Path_Section[] threads;
 
-	public Path_Finder(int maxSearchDistance, boolean allowDiagMovement, int width, int height, byte[] map) {
-		this.maxSearchDistance = maxSearchDistance;
+	public Path_Finder(boolean allowDiagMovement, int width, int height, byte[] map, int thread_number) {
 		this.allowDiagMovement = allowDiagMovement;
     this.width = width;
     this.height = height;
     this.map = map.clone();
-
-		nodes = new Node[width][height];
-		for (int x=0;x<width;x++) {
-			for (int y=0;y<height;y++) {
-				nodes[x][y] = new Node(x,y);
-			}
-		}
+		num_threads = thread_number;
+		threads = new Path_Section[num_threads];
 	}
 
 	public Route findPath(int sx, int sy, int tx, int ty) {
-		if (map[tx*height+ty] == 1) {
-			return null;
-		}
-		nodes[sx][sy].cost = 0;
-		nodes[sx][sy].depth = 0;
-		closed.clear();
-		open.clear();
-		open.add(nodes[sx][sy]);
-		nodes[tx][ty].parent = null;
-		int maxDepth = 0;
-		while ((maxDepth < maxSearchDistance) && (open.size() != 0)) {
-			Node current = getFirstInOpen();
-			if (current == nodes[tx][ty]) {
-				break;
-			}
-			removeFromOpen(current);
-			addToClosed(current);
-			for (int x=-1;x<2;x++) {
-				for (int y=-1;y<2;y++) {
-					if ((x == 0) && (y == 0)) {
-						continue;
+		set = new ArrayList<Node>();
+		int dist = (ty-sy)/num_threads; int fx = 0; int fy = 0; double cost1 = 0; double cost2 = 0;
+		int s2x = sx; int s2y = sy;
+		if ((tx != 0 && ty != 0) && (map[tx*height+ty] != 1)) {
+			for (int t = 0; t < num_threads; t++) {
+				if (t!=num_threads-1) {
+					fx = 0;
+					fy = s2y+dist;
+					cost1 = Absolute_Heuristic.get_cost(0, fy, tx, ty);
+					cost2 = Absolute_Heuristic.get_cost(1, fy, tx, ty);
+					if (cost1 < cost2) {
+						fx = 1;
+						cost1 = cost2;
 					}
-					if (!allowDiagMovement) {
-						if ((x != 0) && (y != 0)) {
-							continue;
-						}
-					}
-					int xp = x + current.x;
-					int yp = y + current.y;
-					if (isValidLocation(sx,sy,xp,yp)) {
-						double nextStepCost = current.cost + 1;
-						Node neighbour = nodes[xp][yp];
-						if (nextStepCost < neighbour.cost) {
-							if (inOpenList(neighbour)) {
-								removeFromOpen(neighbour);
-							}
-							if (inClosedList(neighbour)) {
-								removeFromClosed(neighbour);
+					for (int x = 2; x < width; x++) {
+						if (map[x*height+fy] != 1) {
+							cost2 = Absolute_Heuristic.get_cost(x, fy, tx, ty);
+							if (cost2 < cost1) {
+								fx = x;
+								cost1 = cost2;
 							}
 						}
-						if (!inOpenList(neighbour) && !(inClosedList(neighbour))) {
-							neighbour.cost = nextStepCost;
-							neighbour.heuristic = getHeuristicCost(xp, yp, tx, ty);
-							maxDepth = Math.max(maxDepth, neighbour.setParent(current));
-							addToOpen(neighbour);
-						}
 					}
+				} else {
+					fy = ty;
+					fx = tx;
 				}
+				threads[t] = new Path_Section(this, width, height, s2x, s2y, fx, fy, map, allowDiagMovement);
+				System.out.println("Start "+t+": "+s2x+", "+s2y);
+				System.out.println("End "+t+": "+fx+", "+fy);
+				s2x = fx; s2y = fy;
 			}
 		}
-		if (nodes[tx][ty].parent == null) {
-			return null;
+		for (int t = 0; t < num_threads; t++) {
+			threads[t].start();
+		}
+		for (int t = 0; t < num_threads; t++) {
+			try {
+				threads[t].join();
+			} catch(Exception e) {
+				e.printStackTrace();
+			}
 		}
 		Route path = new Route();
-		Node target = nodes[tx][ty];
-		while (target != nodes[sx][sy]) {
-			path.add_first_step(target.x, target.y);
-			target = target.parent;
+		for (int s = 0; s < set.size(); s++) {
+			path.add_step(set.get(s).x, set.get(s).y);
 		}
-		path.add_first_step(sx,sy);
 		return path;
 	}
 
-	protected Node getFirstInOpen() {
-		return (Node) open.get(0);
+	public void set_open (ArrayList<Node> sa) {
+		set = sa;
 	}
 
-	protected void addToOpen(Node node) {
-		open.add(node);
+	public byte[] get_map () {
+		return map;
 	}
 
-	protected boolean inOpenList(Node node) {
-		return open.contains(node);
+	public boolean get_diag_movement () {
+		return allowDiagMovement;
 	}
 
-	protected void removeFromOpen(Node node) {
-		open.remove(node);
-	}
-
-	protected void addToClosed(Node node) {
-		closed.add(node);
-	}
-
-	protected boolean inClosedList(Node node) {
-		return closed.contains(node);
-	}
-
-	protected void removeFromClosed(Node node) {
-		closed.remove(node);
-	}
-
-	protected boolean isValidLocation(int sx, int sy, int x, int y) {
-		boolean invalid = (x < 0) || (y < 0) || (x >= width || (y >= height));
-		if ((!invalid) && ((sx != x) || (sy != y))) {
-			invalid = map[x*height+y] == 1;
+	public void add_to_path (ArrayList<Node> list) {
+		for (int s = 0; s < list.size(); s++) {
+			set.add(list.get(s));
 		}
-		return !invalid;
 	}
 
-	public double getHeuristicCost(int x, int y, int tx, int ty) {
-		return Absolute_Heuristic.get_cost(x, y, tx, ty);
-	}
+	public int get_width () {return width;} public int get_height () {return height;}
 }
