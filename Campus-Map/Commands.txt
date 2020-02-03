@@ -1,0 +1,2 @@
+javac -d . -cp .;thumbnailator-0.4.8.jar SRC/Map/Graphics/Map.java
+java -cp .;thumbnailator-0.4.8.jar map.graphics.Map
